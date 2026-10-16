@@ -76,11 +76,10 @@ const direccioSchema = new mongoose.Schema(
 direccioSchema.index({ usuario_id: 1, tipo: 1 });
 
 // esto es para assegurar que los campos de texto cumplen con los requisitos. se verifica antes de enviarlo a la DB
-direccioSchema.pre('save', function (next) {
+direccioSchema.pre('save', function () {
   if (this.isModified('calle')) this.calle = this.calle.trim();
   if (this.isModified('ciudad')) this.ciudad = this.ciudad.trim();
   if (this.isModified('pais')) this.pais = this.pais.trim();
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve las direcciones de un usuario

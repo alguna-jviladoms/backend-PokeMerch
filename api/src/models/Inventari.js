@@ -61,11 +61,10 @@ const inventariSchema = new mongoose.Schema(
 inventariSchema.index({ almacen: 1, cantidad: 1 });
 
 // actualiza la fecha cada vez que se modifica el stock. se verifica antes de enviarlo a la DB
-inventariSchema.pre('save', function (next) {
+inventariSchema.pre('save', function () {
   if (this.isModified('cantidad') || this.isModified('almacen')) {
     this.actualizado_en = new Date();
   }
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve el stock de un almacén

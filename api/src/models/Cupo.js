@@ -96,9 +96,8 @@ const cupoSchema = new mongoose.Schema(
 cupoSchema.index({ tipo_descuento: 1, fecha_fin: -1 });
 
 // esto es para assegurar que el campo codigo cumple con los requisitos. se verifica antes de enviarlo a la DB
-cupoSchema.pre('save', function (next) {
+cupoSchema.pre('save', function () {
   if (this.isModified('codigo')) this.codigo = this.codigo.toUpperCase().trim();
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve los cupones vigentes en la fecha actual

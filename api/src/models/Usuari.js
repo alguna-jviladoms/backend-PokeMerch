@@ -107,10 +107,9 @@ const usuariSchema = new mongoose.Schema(
 usuariSchema.index({ rol: 1, fecha_registro: -1 });
 
 // esto es para assegurar que los campos de nombre y email cumplen con los requisitos. se verifica antes de enviarlo a la DB
-usuariSchema.pre('save', function (next) {
+usuariSchema.pre('save', function () {
   if (this.isModified('email')) this.email = this.email.toLowerCase().trim();
   if (this.isModified('nombre')) this.nombre = this.nombre.trim();
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve los atributos a excepcion de password_hash porque el select es false

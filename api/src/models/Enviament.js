@@ -65,10 +65,9 @@ const enviamentSchema = new mongoose.Schema(
 enviamentSchema.index({ estado: 1, fecha_envio: -1 });
 
 // esto es para assegurar que los campos de texto cumplen con los requisitos. se verifica antes de enviarlo a la DB
-enviamentSchema.pre('save', function (next) {
+enviamentSchema.pre('save', function () {
   if (this.isModified('transportista')) this.transportista = this.transportista.trim();
   if (this.isModified('num_seguimiento')) this.num_seguimiento = this.num_seguimiento.toUpperCase().trim();
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve los envios de un pedido

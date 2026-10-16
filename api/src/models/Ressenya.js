@@ -69,9 +69,8 @@ ressenyaSchema.index({ producto_id: 1, usuario_id: 1 }, { unique: true });
 ressenyaSchema.index({ producto_id: 1, fecha: -1 });
 
 // esto es para assegurar que el campo comentario cumple con los requisitos. se verifica antes de enviarlo a la DB
-ressenyaSchema.pre('save', function (next) {
+ressenyaSchema.pre('save', function () {
   if (this.isModified('comentario') && this.comentario) this.comentario = this.comentario.trim();
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve las reseñas de un producto

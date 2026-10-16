@@ -75,10 +75,9 @@ const producteSchema = new mongoose.Schema(
 producteSchema.index({ categoria_id: 1, nombre: 1 });
 
 // esto es para assegurar que los campos de nombre y sku cumplen con los requisitos. se verifica antes de enviarlo a la DB
-producteSchema.pre('save', function (next) {
+producteSchema.pre('save', function () {
   if (this.isModified('nombre')) this.nombre = this.nombre.trim();
   if (this.isModified('sku')) this.sku = this.sku.toUpperCase().trim();
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve los productos activos de una categoría

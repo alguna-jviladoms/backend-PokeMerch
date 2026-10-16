@@ -51,9 +51,8 @@ const categoriaSchema = new mongoose.Schema(
 categoriaSchema.index({ categoria_padre_id: 1, nombre: 1 });
 
 // esto es para assegurar que el campo nombre cumple con los requisitos. se verifica antes de enviarlo a la DB
-categoriaSchema.pre('save', function (next) {
+categoriaSchema.pre('save', function () {
   if (this.isModified('nombre')) this.nombre = this.nombre.trim();
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve las categorías raíz (sin padre)

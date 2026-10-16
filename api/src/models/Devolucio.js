@@ -63,9 +63,8 @@ const devolucioSchema = new mongoose.Schema(
 devolucioSchema.index({ estado: 1, pedido_id: 1 });
 
 // esto es para assegurar que el campo motivo cumple con los requisitos. se verifica antes de enviarlo a la DB
-devolucioSchema.pre('save', function (next) {
+devolucioSchema.pre('save', function () {
   if (this.isModified('motivo')) this.motivo = this.motivo.trim();
-  next();
 });
 
 // Añade un método estático al modelo. que devuelve las devoluciones de un pedido

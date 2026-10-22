@@ -1,0 +1,9 @@
+name: Ecommerce Local
+values:
+  - key: baseUrl
+    value: 'http://localhost:3000'
+  - key: categoryId
+    value: ''
+  - key: testSku
+    value: ''
+color: 60

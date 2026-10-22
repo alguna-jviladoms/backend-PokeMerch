@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{baseUrl}}/api/categories"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Categoría Postman",
+      "slug": "{{testSlug}}",
+      "description": "Creada para comprobar la API",
+      "active": true
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      const uniquePart = Date.now().toString();
+      pm.collectionVariables.set('testSlug', `postman-category-${uniquePart}`);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 201', () => pm.response.to.have.status(201));
+      pm.test('Response is JSON', () => pm.response.to.be.json);
+      if (pm.response.code === 201) { const body = pm.response.json(); pm.collectionVariables.set('categoryId', body.data._id); pm.test('Category id is saved', () => pm.expect(body.data._id).to.be.a('string')); }
+    language: text/javascript
+order: 1000

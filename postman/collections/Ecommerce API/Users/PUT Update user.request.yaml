@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/api/users/{{userId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Usuario Postman actualizado"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', () => pm.response.to.have.status(200));
+      pm.test('Response is JSON', () => pm.response.to.be.json);
+      pm.test('No expone passwordHash', () => pm.expect(pm.response.text()).not.to.include('passwordHash'));
+    language: text/javascript
+order: 5000

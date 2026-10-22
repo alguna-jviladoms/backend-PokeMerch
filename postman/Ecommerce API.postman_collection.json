@@ -1,0 +1,146 @@
+{
+  "info": {
+    "_postman_id": "ecommerce-api-local-collection",
+    "name": "Ecommerce API",
+    "description": "CRUD de Products, Categories y Users para pruebas locales. Selecciona el entorno Ecommerce Local. Los endpoints Users solo funcionan desde localhost con NODE_ENV=development. Para crear productos, crea primero una categoría y conserva categoryId.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "categoryId", "value": "", "type": "string" },
+    { "key": "productId", "value": "", "type": "string" },
+    { "key": "userId", "value": "", "type": "string" },
+    { "key": "testSlug", "value": "", "type": "string" },
+    { "key": "testEmail", "value": "", "type": "string" },
+    { "key": "testSku", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "POST Create product",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('testSku', `POSTMAN-${Date.now()}`);"] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+              "pm.test('Response is JSON', () => pm.response.to.be.json);",
+              "if (pm.response.code === 201) { const body = pm.response.json(); pm.collectionVariables.set('productId', body.data._id); }"
+            ] } }
+          ],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"category\": \"{{categoryId}}\",\n  \"nombre\": \"Auriculares de prueba\",\n  \"descripcion\": \"Producto creado desde Postman\",\n  \"precio\": 29.99,\n  \"sku\": \"{{testSku}}\",\n  \"activo\": true\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] } }
+        },
+        {
+          "name": "GET List products",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api", "products"] } }
+        },
+        {
+          "name": "GET Get product by id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] } }
+        },
+        {
+          "name": "PUT Update product",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);"] } }],
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"precio\": 31.99\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] } }
+        },
+        {
+          "name": "DELETE Delete product",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 204', () => pm.response.to.have.status(204));"] } }],
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api", "products", "{{productId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "POST Create category",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["const uniquePart = Date.now().toString();", "pm.collectionVariables.set('testSlug', `postman-category-${uniquePart}`);"] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+              "pm.test('Response is JSON', () => pm.response.to.be.json);",
+              "if (pm.response.code === 201) { const body = pm.response.json(); pm.collectionVariables.set('categoryId', body.data._id); pm.test('Category id is saved', () => pm.expect(body.data._id).to.be.a('string')); }"
+            ] } }
+          ],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Categoría Postman\",\n  \"slug\": \"{{testSlug}}\",\n  \"description\": \"Creada para comprobar la API\",\n  \"active\": true\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/categories", "host": ["{{baseUrl}}"], "path": ["api", "categories"] } }
+        },
+        {
+          "name": "POST Category without name (422)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.collectionVariables.set('missingNameSlug', `no-name-${Date.now()}`);"] } }, { "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 422', () => pm.response.to.have.status(422));", "pm.test('Response is JSON', () => pm.response.to.be.json);", "pm.test('Validation error code', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'));"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"slug\": \"{{missingNameSlug}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/categories", "host": ["{{baseUrl}}"], "path": ["api", "categories"] } }
+        },
+        {
+          "name": "POST Duplicate slug (409)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 409', () => pm.response.to.have.status(409));", "pm.test('Response is JSON', () => pm.response.to.be.json);", "pm.test('Duplicate slug code', () => pm.expect(pm.response.json().error.code).to.eql('DUPLICATE_SLUG'));"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Categoría duplicada\",\n  \"slug\": \"{{testSlug}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/categories", "host": ["{{baseUrl}}"], "path": ["api", "categories"] } }
+        },
+        {
+          "name": "GET List categories",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);", "pm.test('Has pagination metadata', () => pm.expect(pm.response.json().pagination).to.have.property('totalPages'));"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/categories?active=true&sort=name&page=1&limit=10", "host": ["{{baseUrl}}"], "path": ["api", "categories"], "query": [{ "key": "active", "value": "true" }, { "key": "sort", "value": "name" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] } }
+        },
+        {
+          "name": "GET Get category by id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/categories/{{categoryId}}", "host": ["{{baseUrl}}"], "path": ["api", "categories", "{{categoryId}}"] } }
+        },
+        {
+          "name": "PUT Update category",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);"] } }],
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"description\": \"Actualizada desde Postman\"\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/categories/{{categoryId}}", "host": ["{{baseUrl}}"], "path": ["api", "categories", "{{categoryId}}"] } }
+        },
+        {
+          "name": "DELETE Delete category",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 204', () => pm.response.to.have.status(204));"] } }],
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/api/categories/{{categoryId}}", "host": ["{{baseUrl}}"], "path": ["api", "categories", "{{categoryId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "POST Create user",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["const uniquePart = Date.now().toString();", "pm.collectionVariables.set('testEmail', `postman-${uniquePart}@example.com`);"] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+              "pm.test('Response is JSON', () => pm.response.to.be.json);",
+              "const body = pm.response.json();",
+              "pm.test('No expone passwordHash', () => pm.expect(body).to.not.have.property('passwordHash') && pm.expect(body.data).to.not.have.property('passwordHash'));",
+              "if (pm.response.code === 201) pm.collectionVariables.set('userId', body.data._id);"
+            ] } }
+          ],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Usuario Postman\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"ClaveLocalPostman2026!\"\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] } }
+        },
+        {
+          "name": "POST Duplicate email (409)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 409', () => pm.response.to.have.status(409));", "pm.test('Response is JSON', () => pm.response.to.be.json);", "pm.test('Duplicate email code', () => pm.expect(pm.response.json().error.code).to.eql('DUPLICATE_EMAIL'));"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Usuario duplicado\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"ClaveLocalPostman2026!\"\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] } }
+        },
+        {
+          "name": "GET List users",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);", "pm.test('No expone passwordHash', () => pm.expect(pm.response.text()).not.to.include('passwordHash'));"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/users?sort=-createdAt&page=1&limit=10", "host": ["{{baseUrl}}"], "path": ["api", "users"], "query": [{ "key": "sort", "value": "-createdAt" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] } }
+        },
+        {
+          "name": "GET Get user by id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);", "pm.test('No expone passwordHash', () => pm.expect(pm.response.text()).not.to.include('passwordHash'));"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{userId}}"] } }
+        },
+        {
+          "name": "PUT Update user",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 200', () => pm.response.to.have.status(200));", "pm.test('Response is JSON', () => pm.response.to.be.json);", "pm.test('No expone passwordHash', () => pm.expect(pm.response.text()).not.to.include('passwordHash'));"] } }],
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Usuario Postman actualizado\"\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{userId}}"] } }
+        },
+        {
+          "name": "DELETE Deactivate user",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status code is 204', () => pm.response.to.have.status(204));"] } }],
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/api/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{userId}}"] } }
+        }
+      ]
+    }
+  ]
+}

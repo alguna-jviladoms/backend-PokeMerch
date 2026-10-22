@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{baseUrl}}/api/products"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "category": "{{categoryId}}",
+      "nombre": "Auriculares de prueba",
+      "descripcion": "Producto creado desde Postman",
+      "precio": 29.99,
+      "sku": "{{testSku}}",
+      "activo": true
+    }
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('testSku', `POSTMAN-${Date.now()}`);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 201', () => pm.response.to.have.status(201));
+      pm.test('Response is JSON', () => pm.response.to.be.json);
+      if (pm.response.code === 201) { const body = pm.response.json(); pm.collectionVariables.set('productId', body.data._id); }
+    language: text/javascript
+order: 1000

@@ -1,0 +1,10 @@
+$kind: collection
+description: CRUD de Products, Categories y Users para pruebas locales. Selecciona el entorno Ecommerce Local. Los endpoints Users solo funcionan desde localhost con NODE_ENV=development. Para crear productos, crea primero una categoría y conserva categoryId.
+variables:
+  categoryId: ""
+  productId: ""
+  userId: ""
+  testSlug: ""
+  testEmail: ""
+  testSku: ""
+  missingNameSlug: ""

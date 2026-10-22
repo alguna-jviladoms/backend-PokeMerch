@@ -3,7 +3,6 @@ const router = express.Router();
 const productController = require('../controllers/productController');
 
 // Las rutas no tienen logica, solo asocian "método + path → función del controlador"
-
 router.get('/', productController.getProducts);
 
 // Cuando el cliente hace GET a /algo (por ejemplo /products/123), se ejecuta getProductById.

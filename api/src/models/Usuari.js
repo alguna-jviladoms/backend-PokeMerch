@@ -14,25 +14,13 @@ const DOMINIS_TEMPORALS = /@(tempemail|mailinator|10minutemail|guerrillamail)\./
 // Funcion para para validar que el email no sea temporal
 const emailNoTemporal = {
   validator: (v) => !DOMINIS_TEMPORALS.test(v),
-  message: (props) => `El correu ${props.value} pertany a un servei temporal`,
+  message: 'El correo no puede pertenecer a un servicio temporal',
 };
 
-// esto es para validar estandares minimos para la seguridad de la password
-  // - [A-Z]/.test(v) esto mira que tenga una mayúscula
-  // - [a-z]/.test(v) esto mira que tenga una minúscula
-  // - /\d/.test(v) esto mira que tenga un numero entre el 0-9
-  // - v.length >= 8 esto mira que tenga una longitud igual o mayor a 8
-const passwordFort = {
-  validator: (v) => /[A-Z]/.test(v) && /[a-z]/.test(v) && /\d/.test(v) && v.length >= 8,
-  message: 'La contrasenya ha de tenir 8+ caracters, majuscula, minuscula i digit',
-};
-
-// valida que el hash de la contraseña sea un string con formato de hash bcrypt
-  // - el hash bcrypt es cadena de texto codificada de 60 caracteres que almacena de forma segura una contraseña mediante un algoritmo criptográfico lento y adaptativo
-  // - Comcretamente la funcion revisa que inicie con $2a$, $2b$ o $2y$ y que tenga al menos 20 caracteres.
+// Comprueba que el campo de base de datos contenga un hash BCrypt, no una contraseña en claro.
 const hashValid = {
-  validator: (v) => typeof v === 'string' && v.length >= 20 && /^\$2[aby]\$/.test(v),
-  message: 'password_hash ha de ser un hash bcrypt (bcryptjs genera aquest format)',
+  validator: (v) => typeof v === 'string' && /^\$2[aby]\$/.test(v) && v.length === 60,
+  message: 'passwordHash debe contener un hash BCrypt válido',
 };
 
 // aqui se crea el esquema del usuario con sus atributos
@@ -44,11 +32,11 @@ const usuariSchema = new mongoose.Schema(
       type: String,
       default: () => randomUUID(), // - el id lo genera como UUID aleatorio como string no como el ObjectId de MongoDB
     },
-    nombre: {
+    name: {
       type: String,
       required: [true, 'El nombre es obligatorio'], // - required: es obligatorio
       trim: true,    // - trim: elimina los espacios innecesarios
-      minlength: [2, 'El nombre debe tener al menos 2 caracteres'],   // - min y max lenght: longitud minima y maxima
+      minlength: [2, 'El nombre debe tener al menos 2 caracteres'],
       maxlength: [50, 'El nombre no puede superar los 50 caracteres'],
     },
     email: {
@@ -61,11 +49,11 @@ const usuariSchema = new mongoose.Schema(
       validate: emailNoTemporal,    // - validate: llamamos a la funcion para validar que el email no es temporal y marcamos un boleano 
       index: true,    // - index: le marcamos que use un índeice de mongo que declararemos dentro
     },
-    password_hash: {
+    passwordHash: {
       type: String,
-      required: [true, 'El password_hash es obligatorio'],  // - required: es obligatorio
+      required: [true, 'El passwordHash es obligatorio'],
       validate: hashValid,    // - validate: llamamos a la funcion para validar si es valido 
-      select: false, // mirar que es
+      select: false, // Mongoose no incluye la contraseña hash en las consultas por defecto.
     },
     telefono: {
       type: String,
@@ -79,23 +67,28 @@ const usuariSchema = new mongoose.Schema(
       default: () => new Date(),  //ponemos la fecha actual
       immutable: true,    //hacemos que el atributo no se pueda modificar
     },
-    rol: {
+    role: {
       type: String,
       required: [true, 'El rol es obligatorio'],  // - required: es obligatorio
       enum: {
-        values: ['cliente', 'admin', 'repartidor'],
+        values: ['client', 'admin'],
         message: 'El rol "{VALUE}" no es valido',
       },
-      default: 'cliente',   // por defecto ponemos el rol cliente
+      default: 'client',   // El rol normal se asigna en el servidor, no desde el body.
       index: true,    // que use un índice
+    },
+    active: {
+      type: Boolean,
+      default: true,
     },
   },
   {
     versionKey: false,    // elimina el campo __v que Mongoose añade por defecto
+    timestamps: true, // Añade createdAt y updatedAt automáticamente.
     toJSON: {   // convierte a JSON
       virtuals: true,   // incluye campos virtuales, como id. Que son los que se generan de manera dinamica y no se guradan automaticamente
-      transform: (doc, ret) => {  //antes de devolver el JSON, elimina password_hash y id. Así nunca se filtra el hash de la contraseña.
-        delete ret.password_hash;
+      transform: (doc, ret) => {  // Nunca devolvemos el hash de contraseña ni el id virtual duplicado.
+        delete ret.passwordHash;
         delete ret.id;
         return ret;
       },
@@ -103,19 +96,19 @@ const usuariSchema = new mongoose.Schema(
   }
 );
 
-// creamos un índice rol ascendente, fecha_registro descendente.
-usuariSchema.index({ rol: 1, fecha_registro: -1 });
+// Índice para buscar usuarios por rol y fecha de creación.
+usuariSchema.index({ role: 1, createdAt: -1 });
 
 // esto es para assegurar que los campos de nombre y email cumplen con los requisitos. se verifica antes de enviarlo a la DB
 usuariSchema.pre('save', function () {
   if (this.isModified('email')) this.email = this.email.toLowerCase().trim();
-  if (this.isModified('nombre')) this.nombre = this.nombre.trim();
+  if (this.isModified('name')) this.name = this.name.trim();
 });
 
-// Añade un método estático al modelo. que devuelve los atributos a excepcion de password_hash porque el select es false
-usuariSchema.statics.activosPorRol = function (rol) {
-  return this.find({ rol }).select('nombre email telefono fecha_registro');
+// Método de consulta: devuelve usuarios activos de un rol y omite passwordHash.
+usuariSchema.statics.activosPorRol = function (role) {
+  return this.find({ role, active: true }).select('name email telefono createdAt');
 };
 
-// Compila el esquema y exporta el modelo Usuari
+// Conservamos el nombre Usuari porque los demás esquemas ya lo usan en sus referencias.
 module.exports = mongoose.model('Usuari', usuariSchema);

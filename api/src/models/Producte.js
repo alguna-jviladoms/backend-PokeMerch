@@ -16,10 +16,10 @@ const producteSchema = new mongoose.Schema(
       type: String,
       default: () => randomUUID(), // - el id lo genera como UUID aleatorio como string no como el ObjectId de MongoDB
     },
-    categoria_id: {
-      type: String,
-      required: [true, 'El categoria_id es obligatorio'], // - required: es obligatorio
-      ref: 'Categoria', // - ref: referencia al model Categoria para poder hacer populate
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: [true, 'La categoría es obligatoria'],
+      ref: 'Category', // Debe coincidir con mongoose.model('Category', ...) para que populate funcione.
       index: true,    // - index: le marcamos que use un índice de mongo que declararemos dentro
     },
     nombre: {
@@ -71,8 +71,8 @@ const producteSchema = new mongoose.Schema(
   }
 );
 
-// creamos un índice categoria ascendente, nombre ascendente.
-producteSchema.index({ categoria_id: 1, nombre: 1 });
+// Índice compuesto para buscar productos por categoría y ordenarlos/filtrarlos por nombre.
+producteSchema.index({ category: 1, nombre: 1 });
 
 // esto es para assegurar que los campos de nombre y sku cumplen con los requisitos. se verifica antes de enviarlo a la DB
 producteSchema.pre('save', function () {
@@ -81,8 +81,8 @@ producteSchema.pre('save', function () {
 });
 
 // Añade un método estático al modelo. que devuelve los productos activos de una categoría
-producteSchema.statics.activosPorCategoria = function (categoria_id) {
-  return this.find({ categoria_id, activo: true }).select('nombre descripcion precio sku');
+producteSchema.statics.activosPorCategoria = function (categoryId) {
+  return this.find({ category: categoryId, activo: true }).select('nombre descripcion precio sku');
 };
 
 // Compila el esquema y exporta el modelo Producte

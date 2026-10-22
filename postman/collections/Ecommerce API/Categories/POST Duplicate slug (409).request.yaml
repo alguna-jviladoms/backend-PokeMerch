@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/api/categories"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Categoría duplicada",
+      "slug": "{{testSlug}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 409', () => pm.response.to.have.status(409));
+      pm.test('Response is JSON', () => pm.response.to.be.json);
+      pm.test('Duplicate slug code', () => pm.expect(pm.response.json().error.code).to.eql('DUPLICATE_SLUG'));
+    language: text/javascript
+order: 3000

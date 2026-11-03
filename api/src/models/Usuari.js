@@ -52,8 +52,11 @@ const usuariSchema = new mongoose.Schema(
     passwordHash: {
       type: String,
       required: [true, 'El passwordHash es obligatorio'],
-      validate: hashValid,    // - validate: llamamos a la funcion para validar si es valido 
-      select: false, // Mongoose no incluye la contraseña hash en las consultas por defecto.
+      // El servicio convierte la contraseña recibida en un hash BCrypt antes de guardar el usuario.
+      // Aquí solo guardamos ese hash y rechazamos valores que parezcan texto plano.
+      validate: hashValid,
+      // Mongoose no trae este campo en las consultas normales; el login lo pide de forma explícita.
+      select: false,
     },
     telefono: {
       type: String,

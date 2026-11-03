@@ -99,9 +99,17 @@ Crea el fitxer `api/.env` (no es puja al repositori, ja està al `.gitignore`) a
 PORT=3000
 MONGO_URI=mongodb://admin:1234@localhost:27000/?authSource=admin
 NODE_ENV=development
+JWT_SECRET=PEGA_AQUI_UN_SECRETO_ALEATORIO_DE_AL_MENOS_32_BYTES
+JWT_EXPIRES_IN=1h
 ```
 
-`NODE_ENV=development` habilita temporalment el CRUD d'usuaris només per a connexions locals. No utilitzis aquest valor en un desplegament públic.
+Genera un secreto local aleatorio con Node y copia el resultado a `JWT_SECRET` en `api/.env`:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
+```
+
+No compartas ni publiques el secreto. `JWT_EXPIRES_IN` es opcional y por defecto vale `1h`. `NODE_ENV=development` habilita temporalmente el CRUD administrativo de `/api/users` solo para conexiones locales; no utilices este valor para publicar ese CRUD.
 
 ### 3. Arrencar l'API
 
@@ -140,7 +148,7 @@ Si la importació des de VS Code mostra un error genèric, importa primer només
 
 La col·lecció desa automàticament `categoryId`, `productId` i `userId` després de crear cada recurs. Com que la carpeta Products apareix abans de Categories, crea primer una categoria amb **Categories → POST Create category**; després ja pots provar **Products → POST Create product**, que necessita aquest ID. El slug, el SKU i l'email de les peticions de creació es generen de nou a cada execució. Les peticions d'error esperen `422` per categoria sense nom, `409` per slug duplicat i `409` per email duplicat.
 
-Els endpoints d'usuaris només funcionen amb `NODE_ENV=development` i connexió local. Utilitza dades fictícies; no despleguis aquesta API d'usuaris públicament mentre no tingui autenticació i permisos.
+El CRUD administratiu de `/api/users` continua limitat a `NODE_ENV=development` i connexions locals; utilitza dades fictícies i no el publiquis mentre no tingui autorització RBAC. El registre i el login estan disponibles a `/api/auth` i retornen un JWT.
 
 ## Endpoints de l'API
 
@@ -165,6 +173,35 @@ Als exemples, `{{categoryId}}` i `{{productId}}` són variables d'entorn de Post
 | GET | `/api/users/:id` | Consultar un usuari local |
 | PUT | `/api/users/:id` | Modificar camps permesos |
 | DELETE | `/api/users/:id` | Desactivar l'usuari (`active=false`) |
+| POST | `/api/auth/register` | Registrar un usuario cliente y devolver JWT |
+| POST | `/api/auth/login` | Comprobar credenciales y devolver JWT |
+
+### Registro y login
+
+**Registrar** — `POST /api/auth/register`
+
+```json
+{
+  "name": "Usuario de prueba",
+  "email": "registro@example.com",
+  "password": "UnaClaveLocal-2026!"
+}
+```
+
+La contraseña debe tener al menos 12 caracteres y no más de 72 bytes (límite de BCrypt). Se guarda únicamente como hash BCrypt. El servidor asigna `role: "client"` y rechaza `role`, `passwordHash` y otros campos extra. Una respuesta correcta (`201`) contiene un objeto `user` sin hash y un `token` firmado.
+
+**Iniciar sesión** — `POST /api/auth/login`
+
+```json
+{
+  "email": "registro@example.com",
+  "password": "UnaClaveLocal-2026!"
+}
+```
+
+Login busca el email normalizado, lee el hash solo para compararlo con BCrypt y nunca devuelve `passwordHash`. Email o contraseña incorrectos, y cuentas desactivadas, responden `401 INVALID_CREDENTIALS` con un mensaje común. Los emails duplicados durante el registro responden `409 DUPLICATE_EMAIL`.
+
+El JWT se firma con `JWT_SECRET` mediante HS256 y expira según `JWT_EXPIRES_IN` (por defecto una hora). La respuesta indica `tokenType: "Bearer"`. Un JWT firmado no está cifrado: su payload se puede leer, así que no incluyas contraseñas ni secretos. Los endpoints aún no usan middleware que valide este token, por lo que el resto de la API todavía no está protegido por JWT ni RBAC.
 
 ### Proves de categories
 
@@ -247,7 +284,7 @@ Les respostes dels productes inclouen `category` com a document complet gràcies
 
 ### Proves locals d'usuaris
 
-**Atenció:** encara no hi ha JWT ni permisos RBAC. `/api/users` només respon quan `NODE_ENV=development` i la connexió ve de `localhost` o `127.0.0.1`. Utilitza dades fictícies i no despleguis aquests endpoints públicament. El registre públic s'afegirà més endavant a `/api/auth/register`.
+**Atenció:** `/api/users` continua sent un CRUD administratiu limitat a `NODE_ENV=development` i connexions locals; encara no té autorització RBAC i no s'ha de desplegar públicament. El registre i el login estan disponibles per separat a `/api/auth/register` i `/api/auth/login`.
 
 **Crear usuari** — `POST /api/users`
 

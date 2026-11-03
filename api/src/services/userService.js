@@ -40,6 +40,12 @@ const validatePassword = (password) => {
       { field: 'password', message: 'Debe tener al menos 12 caracteres' },
     ]);
   }
+  // BCrypt solo procesa hasta 72 bytes; rechazamos passwords mayores para que no se trunquen.
+  if (Buffer.byteLength(password, 'utf8') > 72) {
+    throw new ApiError(422, 'VALIDATION_ERROR', 'Les dades no són vàlides', [
+      { field: 'password', message: 'No puede superar 72 bytes al usar BCrypt' },
+    ]);
+  }
 };
 
 const createUser = async (input) => {
@@ -58,7 +64,7 @@ const createUser = async (input) => {
 
   validatePassword(data.password);
 
-  // BCrypt convierte la contraseña original en un hash irreversible antes de guardar.
+  // Este servicio aplica BCrypt antes de crear el documento; MongoDB nunca recibe la contraseña original.
   const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
   const user = new User({
     name: data.name,
@@ -68,6 +74,7 @@ const createUser = async (input) => {
     active: true,
   });
 
+  // save() ejecuta las validaciones y persiste el usuario usando el modelo Usuari.
   return user.save();
 };
 

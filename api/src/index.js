@@ -5,6 +5,7 @@ const connectDB = require("./config/db");
 const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const userRoutes = require("./routes/userRoutes");
+const authRoutes = require("./routes/authRoutes");
 const ApiError = require("./utils/ApiError");
 const errorHandler = require("./middleware/errorHandler");
 
@@ -21,6 +22,8 @@ app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 // Endpoints locales de desarrollo; userRoutes los bloquea fuera de NODE_ENV=development.
 app.use('/api/users', userRoutes);
+// Registro público y login; las rutas protegidas se añadirán con el middleware JWT.
+app.use('/api/auth', authRoutes);
 
 // Si ninguna ruta coincide, lo convertimos en un error con el mismo formato JSON.
 app.use((req, res, next) => {

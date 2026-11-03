@@ -4,7 +4,7 @@ const ApiError = require('../utils/ApiError');
 
 const router = express.Router();
 
-// Hasta añadir autenticación y permisos, estos endpoints solo funcionan en desarrollo local.
+// Hasta añadir autorización RBAC, la administración directa de usuarios solo funciona en local.
 const allowLocalDevelopmentOnly = (req, res, next) => {
   const isDevelopment = process.env.NODE_ENV === 'development';
   const remoteAddress = req.socket.remoteAddress;

@@ -1,10 +1,11 @@
 const express = require('express');
 const userController = require('../controllers/userController');
 const ApiError = require('../utils/ApiError');
+const authenticateToken = require('../middleware/authenticateToken');
 
 const router = express.Router();
 
-// Hasta añadir autorización RBAC, la administración directa de usuarios solo funciona en local.
+// El token confirma identidad; este control conserva además el límite local mientras no haya RBAC.
 const allowLocalDevelopmentOnly = (req, res, next) => {
   const isDevelopment = process.env.NODE_ENV === 'development';
   const remoteAddress = req.socket.remoteAddress;
@@ -21,7 +22,8 @@ const allowLocalDevelopmentOnly = (req, res, next) => {
   next();
 };
 
-// Este control se ejecuta antes de cualquier operación de usuario.
+// Primero exigimos identidad y después comprobamos que la petición sea local y de desarrollo.
+router.use(authenticateToken);
 router.use(allowLocalDevelopmentOnly);
 
 router.get('/', userController.getUsers);

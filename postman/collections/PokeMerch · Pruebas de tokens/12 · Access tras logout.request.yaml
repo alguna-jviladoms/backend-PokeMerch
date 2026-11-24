@@ -1,0 +1,21 @@
+$kind: http-request
+url: "{{baseUrl}}/api/categories?page=1&limit=1"
+method: GET
+queryParams:
+  page: "1"
+  limit: "1"
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 401", () => pm.response.to.have.status(401));
+      pm.test("INVALID_ACCESS_TOKEN", () => {
+        const body = pm.response.json();
+        pm.expect(body.success).to.equal(false);
+        pm.expect(body.error.code).to.equal("INVALID_ACCESS_TOKEN");
+      });
+    language: text/javascript
+order: 12000

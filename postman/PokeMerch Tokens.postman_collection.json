@@ -1,0 +1,540 @@
+{
+  "info": {
+    "name": "PokeMerch · Pruebas de tokens",
+    "description": "Ejecuta la colección completa en orden con el Collection Runner. Configura baseUrl, authTestEmail y authTestPassword en el entorno activo. Usa una cuenta local ficticia ya registrada. Las pruebas crean y revocan sus propias sesiones y guardan los tokens solo durante la ejecución.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 · Login",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "for (const key of [\"accessToken\", \"refreshToken\", \"previousRefreshToken\"]) pm.variables.set(key, \"\");",
+              "if (!pm.variables.get(\"authTestEmail\") || !pm.variables.get(\"authTestPassword\")) {",
+              "  throw new Error(\"Configura authTestEmail y authTestPassword con una cuenta local de prueba.\");",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Devuelve ambos JWT y omite hashes\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(true);",
+              "  const data = body.data;",
+              "  pm.expect(data.tokenType).to.equal(\"Bearer\");",
+              "  for (const key of [\"accessToken\", \"refreshToken\"]) {",
+              "    pm.expect(data[key]).to.match(/^[\\w-]+\\.[\\w-]+\\.[\\w-]+$/);",
+              "  }",
+              "  pm.expect(data.accessToken).not.to.equal(data.refreshToken);",
+              "  pm.expect(data.user).not.to.have.property(\"passwordHash\");",
+              "  pm.expect(data).not.to.have.property(\"tokenHash\");",
+              "  if (pm.response.code === 200) {",
+              "    pm.variables.set(\"accessToken\", data.accessToken);",
+              "    pm.variables.set(\"refreshToken\", data.refreshToken);",
+              "    pm.variables.set(\"previousRefreshToken\", data.refreshToken);",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{authTestEmail}}\",\n  \"password\": \"{{authTestPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "02 · Categorías sin token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"AUTHENTICATION_REQUIRED\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(false);",
+              "  pm.expect(body.error.code).to.equal(\"AUTHENTICATION_REQUIRED\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/categories?page=1&limit=1"
+      }
+    },
+    {
+      "name": "03 · Categorías con access token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Devuelve el listado paginado\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(true);",
+              "  pm.expect(body.data).to.be.an(\"array\");",
+              "  pm.expect(body.pagination.limit).to.equal(1);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/categories?page=1&limit=1"
+      }
+    },
+    {
+      "name": "04 · Categorías rechaza refresh token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"INVALID_ACCESS_TOKEN\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(false);",
+              "  pm.expect(body.error.code).to.equal(\"INVALID_ACCESS_TOKEN\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{refreshToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/categories?page=1&limit=1"
+      }
+    },
+    {
+      "name": "05 · Renovar el par",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Devuelve ambos JWT y omite hashes\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(true);",
+              "  const data = body.data;",
+              "  pm.expect(data.tokenType).to.equal(\"Bearer\");",
+              "  for (const key of [\"accessToken\", \"refreshToken\"]) {",
+              "    pm.expect(data[key]).to.match(/^[\\w-]+\\.[\\w-]+\\.[\\w-]+$/);",
+              "  }",
+              "  pm.expect(data.accessToken).not.to.equal(data.refreshToken);",
+              "  pm.expect(data.user).not.to.have.property(\"passwordHash\");",
+              "  pm.expect(data).not.to.have.property(\"tokenHash\");",
+              "  pm.expect(data.refreshToken).not.to.equal(pm.variables.get(\"previousRefreshToken\"));",
+              "  if (pm.response.code === 200) {",
+              "    pm.variables.set(\"accessToken\", data.accessToken);",
+              "    pm.variables.set(\"refreshToken\", data.refreshToken);",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/refresh",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "06 · Categorías con access token renovado",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/categories?page=1&limit=1"
+      }
+    },
+    {
+      "name": "07 · Rechazar refresh token anterior",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"REFRESH_TOKEN_REUSED\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(false);",
+              "  pm.expect(body.error.code).to.equal(\"REFRESH_TOKEN_REUSED\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/refresh",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{previousRefreshToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "08 · Access de sesión revocada",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"INVALID_ACCESS_TOKEN\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(false);",
+              "  pm.expect(body.error.code).to.equal(\"INVALID_ACCESS_TOKEN\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/categories?page=1&limit=1"
+      }
+    },
+    {
+      "name": "09 · Refresh de sesión revocada",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"INVALID_REFRESH_TOKEN\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(false);",
+              "  pm.expect(body.error.code).to.equal(\"INVALID_REFRESH_TOKEN\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/refresh",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "10 · Login para probar logout",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "for (const key of [\"accessToken\", \"refreshToken\", \"previousRefreshToken\"]) pm.variables.set(key, \"\");",
+              "if (!pm.variables.get(\"authTestEmail\") || !pm.variables.get(\"authTestPassword\")) {",
+              "  throw new Error(\"Configura authTestEmail y authTestPassword con una cuenta local de prueba.\");",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Devuelve ambos JWT y omite hashes\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(true);",
+              "  const data = body.data;",
+              "  pm.expect(data.tokenType).to.equal(\"Bearer\");",
+              "  for (const key of [\"accessToken\", \"refreshToken\"]) {",
+              "    pm.expect(data[key]).to.match(/^[\\w-]+\\.[\\w-]+\\.[\\w-]+$/);",
+              "  }",
+              "  pm.expect(data.accessToken).not.to.equal(data.refreshToken);",
+              "  pm.expect(data.user).not.to.have.property(\"passwordHash\");",
+              "  pm.expect(data).not.to.have.property(\"tokenHash\");",
+              "  if (pm.response.code === 200) {",
+              "    pm.variables.set(\"accessToken\", data.accessToken);",
+              "    pm.variables.set(\"refreshToken\", data.refreshToken);",
+              "    pm.variables.set(\"previousRefreshToken\", data.refreshToken);",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{authTestEmail}}\",\n  \"password\": \"{{authTestPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "11 · Cerrar sesión",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Confirma el cierre de sesión\", () => {",
+              "  pm.expect(pm.response.json().data.message).to.equal(\"Sesión cerrada\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/auth/logout"
+      }
+    },
+    {
+      "name": "12 · Access tras logout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"INVALID_ACCESS_TOKEN\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(false);",
+              "  pm.expect(body.error.code).to.equal(\"INVALID_ACCESS_TOKEN\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [],
+        "url": "{{baseUrl}}/api/categories?page=1&limit=1"
+      }
+    },
+    {
+      "name": "13 · Refresh tras logout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"INVALID_REFRESH_TOKEN\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.success).to.equal(false);",
+              "  pm.expect(body.error.code).to.equal(\"INVALID_REFRESH_TOKEN\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/refresh",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -19,11 +19,11 @@ backend/
 ├── api/
 │   ├── .env                     # Variables d'entorn (no es puja al repo)
 │   ├── package.json             # Dependències i scripts de l'API
-│   └── src/
+│   ├── src/
 │       ├── index.js             # Punt d'entrada: configura Express i escolta el port
 │       ├── config/
 │       │   └── db.js            # Connexió a MongoDB amb Mongoose
-│       ├── models/              # Esquemes de Mongoose (11 models)
+│       ├── models/              # Esquemes de Mongoose (12 models)
 │       │   ├── Categoria.js
 │       │   ├── Comanda.js
 │       │   ├── Cupo.js
@@ -34,19 +34,34 @@ backend/
 │       │   ├── Pagament.js
 │       │   ├── Producte.js
 │       │   ├── Ressenya.js
+│       │   ├── Tokens.js
 │       │   └── Usuari.js
 │       ├── controllers/         # Lògica de les peticions HTTP
+│       │   ├── authController.js
+│       │   ├── browserAuthController.js
 │       │   ├── categoryController.js
-│       │   ├── userController.js
-│       │   └── productController.js
+│       │   ├── productController.js
+│       │   └── userController.js
+│       ├── middleware/          # Autenticació i errors
+│       │   ├── authenticateToken.js
+│       │   └── errorHandler.js
+│       ├── security/            # Cookies i origen del canal navegador
+│       │   ├── browserAuthCookies.js
+│       │   └── browserAuthOrigin.js
 │       ├── routes/              # Definició de rutes de l'API
+│       │   ├── authRoutes.js
+│       │   ├── browserAuthRoutes.js
 │       │   ├── categoryRoutes.js
-│       │   ├── userRoutes.js
-│       │   └── productRoutes.js
+│       │   ├── productRoutes.js
+│       │   └── userRoutes.js
 │       └── services/            # Lògica de negoci / accés a dades
+│           ├── authService.js
 │           ├── categoryService.js
+│           ├── productService.js
 │           ├── userService.js
-│           └── productService.js
+│           └── token/
+│               └── tokenService.js
+│   └── test/                    # Proves de node:test (auth JSON i navegador)
 ├── postman/
 │   ├── Ecommerce API.postman_collection.json   # Peticions CRUD i comprovacions
 │   └── Ecommerce API.postman_environment.json  # Entorn local amb baseUrl
@@ -91,6 +106,44 @@ La base de dades quedarà disponible amb la següent configuració (definida al 
 | Usuari / contrasenya | `admin` / `1234` (configuració de test, NO producció)  |
 | Volum                | `mongo_data` muntat a `/data/db` (persistència)        |
 
+El mateix `docker-compose.yml` arrenca MongoDB i l'API. El servei `frontend` està comentat al fitxer actual:
+
+| Servei    | Contenidor           | URL                     |
+|-----------|----------------------|-------------------------|
+| MongoDB   | `mongodb_test`        | `localhost:27000`       |
+| Backend   | `pokemerch_backend`   | `http://localhost:3000` |
+
+Para levantar los servicios definidos desde `backend/Docker`:
+
+```bash
+docker compose up -d --build
+```
+
+El backend espera a que MongoDB esté saludable. Para comprobar el estado:
+
+```bash
+docker compose ps
+```
+
+Para detenerlos:
+
+```bash
+docker compose down
+```
+
+### Imágenes de producto
+
+Las imágenes se guardan en `api/media` y se sirven públicamente desde
+`/api/media/<archivo>`. El compose monta esa carpeta dentro del contenedor en
+`/app/media`, así que puedes añadir o sustituir archivos `.webp` desde el
+Explorador de Windows sin reconstruir la imagen.
+
+La ruta guardada en MongoDB debe ser relativa, por ejemplo:
+
+```text
+/api/media/pikachu-clasico.webp
+```
+
 ### 2. Configurar les variables d'entorn
 
 Crea el fitxer `api/.env` (no es puja al repositori, ja està al `.gitignore`) amb:
@@ -100,16 +153,21 @@ PORT=3000
 MONGO_URI=mongodb://admin:1234@localhost:27000/?authSource=admin
 NODE_ENV=development
 JWT_SECRET=PEGA_AQUI_UN_SECRETO_ALEATORIO_DE_AL_MENOS_32_BYTES
-JWT_EXPIRES_IN=1h
+JWT_REFRESH_SECRET=PEGA_AQUI_OTRO_SECRETO_ALEATORIO_DE_AL_MENOS_32_BYTES
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+AUTH_ALLOWED_ORIGINS=https://store.example
 ```
 
-Genera un secreto local aleatorio con Node y copia el resultado a `JWT_SECRET` en `api/.env`:
+`AUTH_ALLOWED_ORIGINS` solo se usa fuera de desarrollo. Es una lista separada por comas de orígenes exactos HTTPS, sin ruta ni barra final; por ejemplo, `https://store.example`. En desarrollo, el canal del navegador acepta únicamente `http://localhost:5173`, `http://127.0.0.1:5173` y `http://[::1]:5173`. Si en producción la lista está vacía, las rutas `/api/auth/browser/*` responden `503 BROWSER_AUTH_UNAVAILABLE`. No se habilita CORS: el diseño espera un proxy inverso same-origin.
+
+Genera dos secretos aleatorios distintos con Node y copia cada resultado a su variable correspondiente en `api/.env`:
 
 ```bash
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
-No compartas ni publiques el secreto. `JWT_EXPIRES_IN` es opcional y por defecto vale `1h`. `NODE_ENV=development` habilita temporalmente el CRUD administrativo de `/api/users` solo para conexiones locales; no utilices este valor para publicar ese CRUD.
+Ejecuta el comando dos veces: un valor para `JWT_SECRET` y otro para `JWT_REFRESH_SECRET`. No compartas ni publiques estos secretos. Las duraciones son opcionales; por defecto el access token dura `15m` y el refresh token JSON `7d`. `NODE_ENV=development` habilita temporalmente el CRUD administrativo de `/api/users` solo para conexiones locales y hace que las cookies del navegador no se marquen `Secure`; no utilices este valor para publicar ese CRUD.
 
 ### 3. Arrencar l'API
 
@@ -148,35 +206,45 @@ Si la importació des de VS Code mostra un error genèric, importa primer només
 
 La col·lecció desa automàticament `categoryId`, `productId` i `userId` després de crear cada recurs. Com que la carpeta Products apareix abans de Categories, crea primer una categoria amb **Categories → POST Create category**; després ja pots provar **Products → POST Create product**, que necessita aquest ID. El slug, el SKU i l'email de les peticions de creació es generen de nou a cada execució. Les peticions d'error esperen `422` per categoria sense nom, `409` per slug duplicat i `409` per email duplicat.
 
-El CRUD administratiu de `/api/users` continua limitat a `NODE_ENV=development` i connexions locals; utilitza dades fictícies i no el publiquis mentre no tingui autorització RBAC. El registre i el login estan disponibles a `/api/auth` i retornen un JWT.
+Les lectures de categories i productes són públiques. Per executar `POST`, `PUT` o `DELETE`, fes primer login a `/api/auth/login` i afegeix `Authorization: Bearer <accessToken>`. La col·lecció principal no inclou una carpeta Auth; per provar login, rotació i logout pots importar `postman/PokeMerch Tokens.postman_collection.json`. `/api/users` exigeix a més desenvolupament local.
+
+El CRUD administratiu de `/api/users` exigeix un Bearer vàlid i continua limitat a `NODE_ENV=development` i connexions locals; utilitza dades fictícies i no el publiquis mentre no tingui autorització RBAC. El canal JSON de `/api/auth` emet o rota el parell de JWT; el navegador fa servir `/api/auth/browser` amb cookies `HttpOnly` i no rep tokens al body.
 
 ## Endpoints de l'API
 
 La URL base és `http://localhost:3000`. En Postman, selecciona **Body → raw → JSON** per a les peticions amb cos i envia la capçalera `Content-Type: application/json`.
 Als exemples, `{{categoryId}}` i `{{productId}}` són variables d'entorn de Postman; també pots substituir-les directament pels `_id` retornats per l'API.
 
-| Mètode | Endpoint | Descripció |
-| --- | --- | --- |
-| GET | `/` | Comprovar que l'API està en marxa |
-| POST | `/api/categories` | Crear una categoria |
-| GET | `/api/categories` | Llistar categories |
-| GET | `/api/categories/:id` | Consultar una categoria |
-| PUT | `/api/categories/:id` | Modificar una categoria |
-| DELETE | `/api/categories/:id` | Eliminar una categoria |
-| POST | `/api/products` | Crear un producte |
-| GET | `/api/products` | Llistar productes |
-| GET | `/api/products/:id` | Consultar un producte |
-| PUT | `/api/products/:id` | Modificar un producte |
-| DELETE | `/api/products/:id` | Eliminar un producte |
-| POST | `/api/users` | Crear un usuari local |
-| GET | `/api/users` | Llistar usuaris locals |
-| GET | `/api/users/:id` | Consultar un usuari local |
-| PUT | `/api/users/:id` | Modificar camps permesos |
-| DELETE | `/api/users/:id` | Desactivar l'usuari (`active=false`) |
-| POST | `/api/auth/register` | Registrar un usuario cliente y devolver JWT |
-| POST | `/api/auth/login` | Comprobar credenciales y devolver JWT |
+| Mètode | Endpoint | Descripció | Autenticació |
+| --- | --- | --- | --- |
+| GET | `/` | Comprovar que l'API està en marxa | Pública |
+| GET | `/api/categories` | Llistar categories | Pública |
+| GET | `/api/categories/:id` | Consultar una categoria | Pública |
+| POST | `/api/categories` | Crear una categoria | Bearer |
+| PUT | `/api/categories/:id` | Modificar una categoria | Bearer |
+| DELETE | `/api/categories/:id` | Eliminar una categoria | Bearer |
+| GET | `/api/products` | Llistar productes | Pública |
+| GET | `/api/products/:id` | Consultar un producte | Pública |
+| POST | `/api/products` | Crear un producte | Bearer |
+| PUT | `/api/products/:id` | Modificar un producte | Bearer |
+| DELETE | `/api/products/:id` | Eliminar un producte | Bearer |
+| POST | `/api/users` | Crear un usuari local | Bearer + desenvolupament local |
+| GET | `/api/users` | Llistar usuaris locals | Bearer + desenvolupament local |
+| GET | `/api/users/:id` | Consultar un usuari local | Bearer + desenvolupament local |
+| PUT | `/api/users/:id` | Modificar camps permesos | Bearer + desenvolupament local |
+| DELETE | `/api/users/:id` | Desactivar l'usuari (`active=false`) | Bearer + desenvolupament local |
+| POST | `/api/auth/register` | Registrar un client i tornar JWT al body | Pública |
+| POST | `/api/auth/login` | Comprovar credencials i tornar JWT al body | Pública |
+| POST | `/api/auth/refresh` | Rotar el refresh token i emetre un parell nou | Refresh al body |
+| POST | `/api/auth/logout` | Revocar la sessió de l'access token actual | Bearer |
+| POST | `/api/auth/browser/register` | Registrar des del navegador i fixar cookies | Pública + origin guard |
+| POST | `/api/auth/browser/login` | Iniciar sessió des del navegador i fixar cookies | Pública + origin guard |
+| POST | `/api/auth/browser/refresh` | Renovar l'access token des de la cookie | Cookie `pm_refresh` + origin guard |
+| POST | `/api/auth/browser/logout` | Revocar la sessió i esborrar les cookies | Cookie `pm_refresh` + origin guard |
 
-### Registro y login
+### Autenticació JSON
+
+Aquest canal manté el contracte anterior: els tokens viatgen al cos de la resposta. És el que fan servir Postman o qualsevol client que no sigui un navegador.
 
 **Registrar** — `POST /api/auth/register`
 
@@ -188,9 +256,9 @@ Als exemples, `{{categoryId}}` i `{{productId}}` són variables d'entorn de Post
 }
 ```
 
-La contraseña debe tener al menos 12 caracteres y no más de 72 bytes (límite de BCrypt). Se guarda únicamente como hash BCrypt. El servidor asigna `role: "client"` y rechaza `role`, `passwordHash` y otros campos extra. Una respuesta correcta (`201`) contiene un objeto `user` sin hash y un `token` firmado.
+La contrasenya ha de tenir almenys 12 caràcters i no més de 72 bytes (límit de BCrypt). Es desa només com a hash BCrypt. El servidor assigna `role: "client"` i rebutja `role`, `passwordHash` i altres camps extra. Una resposta correcta (`201`) conté l'usuari sense hash, `accessToken`, `refreshToken`, `tokenType: "Bearer"` i les durades.
 
-**Iniciar sesión** — `POST /api/auth/login`
+**Iniciar sessió** — `POST /api/auth/login`
 
 ```json
 {
@@ -199,9 +267,90 @@ La contraseña debe tener al menos 12 caracteres y no más de 72 bytes (límite 
 }
 ```
 
-Login busca el email normalizado, lee el hash solo para compararlo con BCrypt y nunca devuelve `passwordHash`. Email o contraseña incorrectos, y cuentas desactivadas, responden `401 INVALID_CREDENTIALS` con un mensaje común. Los emails duplicados durante el registro responden `409 DUPLICATE_EMAIL`.
+El login normalitza l'email, llegeix el hash només per comparar-lo amb BCrypt i no retorna mai `passwordHash`. Email o contrasenya incorrectes, i comptes desactivats, responen `401 INVALID_CREDENTIALS` amb un missatge comú. Els emails duplicats durant el registre responen `409 DUPLICATE_EMAIL`.
 
-El JWT se firma con `JWT_SECRET` mediante HS256 y expira según `JWT_EXPIRES_IN` (por defecto una hora). La respuesta indica `tokenType: "Bearer"`. Un JWT firmado no está cifrado: su payload se puede leer, así que no incluyas contraseñas ni secretos. Los endpoints aún no usan middleware que valide este token, por lo que el resto de la API todavía no está protegido por JWT ni RBAC.
+L'access token es firma amb `JWT_SECRET` i dura 15 minuts per defecte. El refresh token es firma amb `JWT_REFRESH_SECRET` i dura 7 dies per defecte. Cada token porta el seu ús (`access` o `refresh`) i s'ha de signar amb HS256. Un JWT signat no està xifrat: el seu payload es pot llegir, així que no hi incloguis contrasenyes ni secrets.
+
+**Renovar la sessió** — `POST /api/auth/refresh`
+
+Envia el refresh token vigent al cos:
+
+```json
+{
+  "refreshToken": "<refresh token vigent>"
+}
+```
+
+Si és vàlid, respon `200` amb un access token i un refresh token nous; el refresh anterior queda substituït. El model `Tokens` desa el hash SHA-256 del refresh vigent, el seu identificador i la caducitat, mai el token en text pla. Si es torna a presentar un token anterior ja rotat, la sessió es revoca i respon `401 REFRESH_TOKEN_REUSED`. Cada login crea una sessió separada.
+
+La rotació és atòmica a MongoDB: si el mateix refresh s'envia en dues renovacions simultànies, només una pot substituir-lo. L'altra es tracta com a reutilització i revoca la sessió. El middleware consulta aquest estat, de manera que també rebutja immediatament els access tokens vinculats a una sessió revocada. Un índex TTL neteja les sessions caducades.
+
+**Tancar sessió** — `POST /api/auth/logout` amb `Authorization: Bearer <accessToken>`. Revoca la sessió actual i els seus tokens deixen de ser acceptats.
+
+Si sospites que un compte està compromès, pots revocar totes les seves sessions des de Compass/Mongosh amb l'UUID de l'usuari:
+
+```js
+db.refreshsessions.updateMany(
+  { userId: "UUID_DEL_USUARIO", revokedAt: null },
+  { $set: { revokedAt: new Date(), revokeReason: "manual" } }
+)
+```
+
+L'emissió, validació i rotació viuen a `api/src/services/token/tokenService.js`. `authService.js` valida les dades i delega; `authController.js` construeix la resposta HTTP.
+
+### Autenticació del navegador amb cookies
+
+El navegador no crida `/api/auth/login`. Utilitza `/api/auth/browser/*`, muntat a `api/src/index.js` abans del parser JSON general. Aquestes rutes retornen només el nom públic de l'usuari i fixen cookies `HttpOnly`; no retornen cap JWT al body.
+
+| Mètode | Ruta | Cos | Resposta correcta |
+| --- | --- | --- | --- |
+| POST | `/api/auth/browser/register` | `{ name, email, password }` | `201` i `{ success: true, data: { user: { name } } }` |
+| POST | `/api/auth/browser/login` | `{ email, password }` | `200` i `{ user: { name } }` |
+| POST | `/api/auth/browser/refresh` | Sense cos | `200` i `{ user: { name } }`; només renova `pm_access` |
+| POST | `/api/auth/browser/logout` | Sense cos | `200` i `{ user: null }`; esborra les cookies |
+
+Cookies:
+
+- `pm_access`: access token.
+- `pm_refresh`: refresh token.
+- Totes dues són `HttpOnly`, `SameSite=Lax`, `Path=/api/auth/browser` i no fixen `Domain`.
+- `Secure` s'activa llevat que `NODE_ENV` sigui exactament `development`.
+- `Max-Age` es deriva del camp `exp` del JWT.
+- Com que el `Path` és `/api/auth/browser`, aquestes cookies no s'envien a `/api/products`, `/api/categories` ni `/api/users`.
+
+El refresh del navegador té una durada fixa de 7 dies, independent de `JWT_REFRESH_EXPIRES_IN`. És de només lectura: no rota el refresh, no reescriu la sessió i no n'allarga la caducitat. Només emet un access token nou, limitat per la caducitat restant de la sessió. La sessió no és deslizant: després de 7 dies cal tornar a iniciar sessió. El refresh JSON no pot rotar una sessió marcada com a navegador i el refresh del navegador rebutja tokens sense el marcador de canal.
+
+Logout revoca la sessió i esborra les cookies. Si no hi ha cookie de refresh o el token ja no és verificable, respon `200` i neteja igualment; una capçalera `Cookie` ambigua o mal formada pot respondre un error no-2xx.
+
+Totes les respostes del router porten `Cache-Control: no-store`. Els errors conserven el format `{ success: false, error: { code, message, details? } }`.
+
+### Origin guard del navegador
+
+`api/src/security/browserAuthOrigin.js` s'executa abans del controlador:
+
+- Exigeix una capçalera `Origin` exacta; rebutja absència, `null` i orígens creuats.
+- Si hi ha `Referer`, el seu origen ha de coincidir amb `Origin`.
+- Si hi ha `Sec-Fetch-Site`, ha de ser `same-origin`.
+- En desenvolupament només accepta el port `5173` a `localhost`, `127.0.0.1` i `[::1]`.
+- En producció exigeix orígens exactes HTTPS a `AUTH_ALLOWED_ORIGINS`, separats per comes. Si la llista és buida, respon `503 BROWSER_AUTH_UNAVAILABLE`.
+- Un origen no permès respon `403 AUTH_ORIGIN_DENIED`.
+- No hi ha CORS; el disseny espera un proxy invers same-origin.
+
+Si Vite arranca a `5174` perquè `5173` està ocupat, o si s'accedeix per la IP de la LAN, l'autenticació del navegador falla amb `403`. El projecte no fixa `strictPort`.
+
+### Protecció de rutes i límits
+
+- `GET /api/products`, `GET /api/products/:id`, `GET /api/categories` i `GET /api/categories/:id` són públics.
+- Les escriptures de productes i categories exigeixen `Authorization: Bearer <accessToken>`.
+- `/api/users` exigeix Bearer i, a més, `NODE_ENV=development` i connexió loopback.
+- `authenticateToken` verifica firma HS256, expiració, `tokenUse: "access"`, rol i que la sessió segueixi activa. Deixa la identitat a `req.auth`.
+- Si falta el header respon `401 AUTHENTICATION_REQUIRED`; si el token no val, ha expirat o és un refresh, respon `401 INVALID_ACCESS_TOKEN`.
+- Les rutes generals no accepten cookies: una cookie de navegador no autoritza una escriptura.
+- Com que el refresh del navegador no rota, aquest canal no detecta la reutilització d'un refresh; un token robat podria usar-se fins a la seva caducitat de 7 dies.
+- No hi ha RBAC: qualsevol access token vàlid, inclòs un de rol `client`, supera l'autenticació. La gestió d'usuaris continua limitada a desenvolupament local.
+- El middleware comprova la sessió, però no el camp `active` de l'usuari. Si es desactiva un compte sense revocar les seves sessions, un access token pot funcionar fins a expirar (com a màxim 15 minuts).
+- No s'ha trobat limitació d'intents ni protecció anti-força bruta; tampoc no s'ha confirmat CSP ni `helmet`.
+- Abans de publicar a Internet caldria configurar orígens HTTPS exactes, limitar intents, revisar CSP/helmet i provar TLS amb proxy invers i MongoDB real. Aquest treball no s'ha desplegat.
 
 ### Proves de categories
 
@@ -284,7 +433,7 @@ Les respostes dels productes inclouen `category` com a document complet gràcies
 
 ### Proves locals d'usuaris
 
-**Atenció:** `/api/users` continua sent un CRUD administratiu limitat a `NODE_ENV=development` i connexions locals; encara no té autorització RBAC i no s'ha de desplegar públicament. El registre i el login estan disponibles per separat a `/api/auth/register` i `/api/auth/login`.
+**Atenció:** `/api/users` continua sent un CRUD administratiu limitat a `NODE_ENV=development` i connexions locals; encara no té autorització RBAC i no s'ha de desplegar públicament. El registre, login, renovació i logout JSON estan disponibles a `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh` i `/api/auth/logout`; el navegador usa `/api/auth/browser/*`. Les lectures de Products i Categories són públiques; les seves escriptures i tot `/api/users` exigeixen un access token Bearer.
 
 **Crear usuari** — `POST /api/users`
 
@@ -330,12 +479,12 @@ Les respostes d'error comparteixen aquest format. `details` només apareix quan 
 }
 ```
 
-Prova aquests casos i comprova tant el codi HTTP com `error.code`:
+Prova aquests casos i comprova tant el codi HTTP com `error.code`. Els `POST`, `PUT` i `DELETE` necessiten el Bearer indicat a l'apartat anterior; les proves d'usuari, a més, desenvolupament local:
 
 1. **Categoria sense nom** — `POST /api/categories` amb `{ "slug": "sense-nom" }`. Esperat: `422 VALIDATION_ERROR`, detall del camp `name`.
 2. **Slug duplicat** — crea una categoria i torna a enviar el mateix `slug`. Esperat: `409 DUPLICATE_SLUG`.
 3. **ID invàlid** — `GET /api/categories/no-es-un-objectid`. Esperat: `400 INVALID_ID`.
-4. **Usuari inexistent** — `GET /api/users/00000000-0000-4000-8000-000000000000` des de localhost amb `NODE_ENV=development`. És un UUID vàlid però no existent. Esperat: `404 USER_NOT_FOUND`.
+4. **Usuari inexistent** — `GET /api/users/00000000-0000-4000-8000-000000000000` des de localhost amb `NODE_ENV=development` i Bearer. És un UUID vàlid però no existent. Esperat: `404 USER_NOT_FOUND`.
 5. **Email duplicat** — crea un usuari i intenta crear-ne un altre amb el mateix email. Esperat: `409 DUPLICATE_EMAIL`.
 6. **Camp no permès** — `PUT /api/users/{{userId}}` amb `{ "role": "admin" }`. Esperat: `400 FIELD_NOT_ALLOWED`, detall del camp `role`.
 7. **Paràmetres de llista incorrectes** — prova `GET /api/categories?page=0`, `GET /api/users?limit=101` o `GET /api/users?sort=passwordHash`. Esperat: `400 INVALID_QUERY`.
@@ -363,7 +512,7 @@ o, en cas d'error:
 }
 ```
 
-Codis d'estat: `200` (consulta o modificació correcta), `201` (recurs creat), `204` (eliminació sense cos), `400` (petició o ID incorrecte), `404` (recurs inexistent), `409` (email o slug duplicat), `422` (validació semàntica) i `500` (error inesperat).
+Codis d'estat: `200` (consulta o modificació correcta), `201` (recurs creat), `204` (eliminació sense cos), `400` (petició o ID incorrecte), `401` (credencials o token no vàlids), `403` (origen no permès o CRUD d'usuaris fora de desenvolupament local), `404` (recurs inexistent), `409` (email o slug duplicat), `422` (validació semàntica), `500` (error inesperat) i `503` (canal de navegador sense configuració d'orígens).
 
 ## Models de dades
 
@@ -372,6 +521,7 @@ Els models utilitzen `_id` com a UUID (string), excepte `Categoria`, que fa serv
 | Model       | Descripció                                                                 |
 | ----------- | -------------------------------------------------------------------------- |
 | `Usuari`    | Usuaris amb rol (`client`, `admin`), email únic i contrasenya protegida amb BCrypt       |
+| `Tokens`    | Sessions de refresh; desa el hash SHA-256, `jti`, caducitat i revocació a `refreshsessions` |
 | `Producte`  | Productes de la botiga amb categoria, preu, SKU i estat actiu/inactiu      |
 | `Categoria` | Categories amb slug únic, estat actiu, timestamps i jerarquia opcional      |
 | `Inventari` | Estoc per producte (relació 1:1) amb almacén i data d'actualització        |
@@ -392,12 +542,17 @@ Des del directori `api`:
 | Comanda       | Descripció                              |
 | ------------- | --------------------------------------- |
 | `npm run dev` | Arrenca l'API amb nodemon (auto-reload) |
-| `npm test`    | Encara no hi ha tests definits          |
+| `npm test`    | Marcador antic; no executa la suite     |
+| `node --test test/browserAuth.test.js test/tokenService.test.js` | Executa les proves d'autenticació amb `node:test` |
+
+Les proves d'autenticació utilitzen models i respostes sintètiques; no necessiten MongoDB. Els dos casos Playwright es marquen com a `skipped` si no es defineix `PM_BROWSER_TEST_PLAYWRIGHT`. La darrera execució reportada per a aquest conjunt va donar 19 proves superades i 2 omeses.
 
 ## Documentació addicional
 
 - `docs/adrs/ADR-001.md` — Elecció de MongoDB com a base de dades.
 - `docs/adrs/ADR-002.md` — Repositoris separats per a backend i frontend.
+- [`../Guias_por_actividades/GUIA_ACTIVIDAD_GALLERY_CARD_AUTH_NAVEGADOR.md`](../Guias_por_actividades/GUIA_ACTIVIDAD_GALLERY_CARD_AUTH_NAVEGADOR.md) — Galeria de productes i autenticació del navegador.
+- `docs/Guias_por_actividades/GUIA_ESTUDIO_AUTENTICACION.md` — Estudio del canal JSON y del canal de navegador.
 
 ## Repositori
 

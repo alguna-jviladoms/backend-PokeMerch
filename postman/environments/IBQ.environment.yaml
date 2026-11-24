@@ -2,3 +2,4 @@ name: IBQ
 values:
   - key: url
     value: ''
+color: 0

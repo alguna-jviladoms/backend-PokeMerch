@@ -1,13 +1,16 @@
 const express = require('express');
 const categoryController = require('../controllers/categoryController');
+const authenticateToken = require('../middleware/authenticateToken');
 
 const router = express.Router();
 
-// Cada ruta enlaza un verbo y una URL con la función que atenderá esa petición.
+// La navegación de la tienda necesita leer las categorías sin iniciar sesión.
 router.get('/', categoryController.getCategories);
 router.get('/:id', categoryController.getCategoryById);
-router.post('/', categoryController.createCategory);
-router.put('/:id', categoryController.updateCategory);
-router.delete('/:id', categoryController.deleteCategory);
+
+// Las operaciones de administración sí requieren identidad verificada.
+router.post('/', authenticateToken, categoryController.createCategory);
+router.put('/:id', authenticateToken, categoryController.updateCategory);
+router.delete('/:id', authenticateToken, categoryController.deleteCategory);
 
 module.exports = router;

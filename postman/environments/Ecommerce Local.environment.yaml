@@ -2,8 +2,14 @@ name: Ecommerce Local
 values:
   - key: baseUrl
     value: 'http://localhost:3000'
-  - key: categoryId
+  - key: authTestEmail
     value: ''
-  - key: testSku
+  - key: authTestPassword
     value: ''
-color: 60
+  - key: refreshToken
+    secret: true
+  - key: accessToken
+    secret: true
+  - key: testEmail
+    value: ''
+color: 240

@@ -6,7 +6,8 @@ workspace:
 
 cloudResources:
   collections:
-    ../postman/collections/Ecommerce API: c02d00bc-64c4-4999-9090-9bc91a19f9e4
+    ../postman/collections/PokeMerch · Pruebas de tokens: 36315fa9-a0ee-4960-8fdf-ddc80a1f6901
+    ../postman/collections/Ecommerce API: 65d911b7-9552-42ca-abbb-194419a09c82
 
 # All resources in the `postman/` folder are automatically registered in Local View.
 # Point to additional files outside the `postman/` folder to register them individually. Example:

@@ -2,14 +2,17 @@ require("dotenv").config();
 
 const express = require("express");
 const connectDB = require("./config/db");
+const { getUploadsDir } = require("./config/uploads");
 const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const userRoutes = require("./routes/userRoutes");
 const authRoutes = require("./routes/authRoutes");
+const browserAuthRoutes = require("./routes/browserAuthRoutes");
 const ApiError = require("./utils/ApiError");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
+app.use('/api/auth/browser', browserAuthRoutes);
 app.use(express.json());
 
 app.get('/', (req, res) => {
@@ -22,8 +25,10 @@ app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 // Endpoints locales de desarrollo; userRoutes los bloquea fuera de NODE_ENV=development.
 app.use('/api/users', userRoutes);
-// Registro público y login; las rutas protegidas se añadirán con el middleware JWT.
+// Registro/login/refresh son endpoints de autenticación; los routers de recursos validan el access token.
 app.use('/api/auth', authRoutes);
+// Servimos los archivos públicos (p. ej. /api/media/pikachu-clasico.webp) desde el directorio configurable.
+app.use('/api/media', express.static(getUploadsDir()));
 
 // Si ninguna ruta coincide, lo convertimos en un error con el mismo formato JSON.
 app.use((req, res, next) => {

@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/api/categories?page=1&limit=1"
+method: GET
+queryParams:
+  page: "1"
+  limit: "1"
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 401", () => pm.response.to.have.status(401));
+      pm.test("AUTHENTICATION_REQUIRED", () => {
+        const body = pm.response.json();
+        pm.expect(body.success).to.equal(false);
+        pm.expect(body.error.code).to.equal("AUTHENTICATION_REQUIRED");
+      });
+    language: text/javascript
+order: 2000

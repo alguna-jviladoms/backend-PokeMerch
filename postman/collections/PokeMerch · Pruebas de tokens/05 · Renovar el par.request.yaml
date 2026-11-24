@@ -1,0 +1,36 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/refresh"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "refreshToken": "{{refreshToken}}"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 200", () => pm.response.to.have.status(200));
+      pm.test("Devuelve ambos JWT y omite hashes", () => {
+        const body = pm.response.json();
+        pm.expect(body.success).to.equal(true);
+        const data = body.data;
+        pm.expect(data.tokenType).to.equal("Bearer");
+        for (const key of ["accessToken", "refreshToken"]) {
+          pm.expect(data[key]).to.match(/^[\w-]+\.[\w-]+\.[\w-]+$/);
+        }
+        pm.expect(data.accessToken).not.to.equal(data.refreshToken);
+        pm.expect(data.user).not.to.have.property("passwordHash");
+        pm.expect(data).not.to.have.property("tokenHash");
+        pm.expect(data.refreshToken).not.to.equal(pm.variables.get("previousRefreshToken"));
+        if (pm.response.code === 200) {
+          pm.variables.set("accessToken", data.accessToken);
+          pm.variables.set("refreshToken", data.refreshToken);
+        }
+      });
+    language: text/javascript
+order: 5000

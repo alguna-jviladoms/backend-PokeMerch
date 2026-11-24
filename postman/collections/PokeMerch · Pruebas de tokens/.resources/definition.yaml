@@ -1,0 +1,2 @@
+$kind: collection
+description: Ejecuta la colección completa en orden con el Collection Runner. Configura baseUrl, authTestEmail y authTestPassword en el entorno activo. Usa una cuenta local ficticia ya registrada. Las pruebas crean y revocan sus propias sesiones y guardan los tokens solo durante la ejecución.

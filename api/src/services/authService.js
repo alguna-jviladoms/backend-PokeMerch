@@ -1,11 +1,11 @@
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 const User = require('../models/Usuari');
 const userService = require('./userService');
+const tokenService = require('./token/tokenService');
 const ApiError = require('../utils/ApiError');
 
-const TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const LOGIN_FIELDS = new Set(['email', 'password']);
+const REFRESH_FIELDS = new Set(['refreshToken']);
 
 // El body debe ser un objeto normal: evita errores al leer propiedades de null o arrays.
 const requireObjectBody = (input) => {
@@ -14,19 +14,22 @@ const requireObjectBody = (input) => {
   }
 };
 
-// Login solo necesita email y password; rechazar el resto hace explícito el contrato de la API.
-const validateLoginFields = (input) => {
+// Comprueba que el body de login solo contenga los campos esperados.
+const validateFields = (input, allowedFields, operation) => {
   requireObjectBody(input);
-  const unexpectedFields = Object.keys(input).filter((field) => !LOGIN_FIELDS.has(field));
+  const unexpectedFields = Object.keys(input).filter((field) => !allowedFields.has(field));
   if (unexpectedFields.length) {
     throw new ApiError(
       400,
       'FIELD_NOT_ALLOWED',
       'La petición contiene campos no permitidos',
-      unexpectedFields.map((field) => ({ field, message: 'Campo no permitido para iniciar sesión' }))
+      unexpectedFields.map((field) => ({ field, message: `Campo no permitido para ${operation}` }))
     );
   }
+};
 
+const validateLoginFields = (input) => {
+  validateFields(input, LOGIN_FIELDS, 'iniciar sesión');
   const missingFields = ['email', 'password'].filter((field) =>
     typeof input[field] !== 'string' || input[field].length === 0
   );
@@ -40,20 +43,16 @@ const validateLoginFields = (input) => {
   }
 };
 
-// Nunca usamos un secreto por defecto: cada entorno debe configurar su propia clave aleatoria.
-const getJwtSecret = () => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) {
-    throw new ApiError(
-      500,
-      'AUTH_CONFIGURATION_ERROR',
-      'El servicio de autenticación no está configurado'
-    );
+const validateRefreshFields = (input) => {
+  validateFields(input, REFRESH_FIELDS, 'renovar la sesión');
+  if (typeof input.refreshToken !== 'string' || input.refreshToken.length === 0) {
+    throw new ApiError(422, 'VALIDATION_ERROR', 'Les dades no són vàlides', [
+      { field: 'refreshToken', message: 'Este campo es obligatorio' },
+    ]);
   }
-  return secret;
 };
 
-// Devolvemos una vista segura y explícita del usuario, sin depender solo de la serialización.
+// La API devuelve una vista pública del usuario y nunca expone passwordHash.
 const toPublicUser = (user) => ({
   _id: user._id,
   name: user.name,
@@ -63,51 +62,45 @@ const toPublicUser = (user) => ({
   createdAt: user.createdAt,
 });
 
-// El JWT solo lleva identificador y rol; no incluye contraseña, email ni datos personales.
-const createAuthResponse = (user) => {
-  // jwt.sign crea y firma el token que el registro/login devolverá al cliente.
-  const token = jwt.sign(
-    { sub: user._id, role: user.role },
-    getJwtSecret(),
-    { algorithm: 'HS256', expiresIn: TOKEN_EXPIRES_IN }
-  );
-
-  return {
-    user: toPublicUser(user),
-    token,
-    tokenType: 'Bearer',
-    expiresIn: TOKEN_EXPIRES_IN,
-  };
-};
-
-const register = async (input) => {
-  // Comprueba la configuración antes de guardar: si falta el secreto no creamos una cuenta sin token.
-  getJwtSecret();
-
-  // userService limita los campos, valida name/email/password y guarda passwordHash con BCrypt.
-  // También asigna role=client y active=true en el servidor.
+// Crear cuenta y gestionar su contraseña pertenece a userService; los tokens a tokenService.
+const register = async (input, tokenOptions) => {
+  tokenService.assertTokenConfiguration();
   const user = await userService.createUser(input);
-  return createAuthResponse(user);
+  const tokens = await tokenService.issueTokens(user, tokenOptions);
+  return { user: toPublicUser(user), ...tokens };
 };
 
-const login = async (input) => {
+const login = async (input, tokenOptions) => {
   validateLoginFields(input);
+  tokenService.assertTokenConfiguration();
 
-  // Normalizamos el correo igual que el esquema: espacios fuera y minúsculas.
+  // Normalizamos el email y pedimos passwordHash solo para verificar la contraseña con BCrypt.
   const email = input.email.trim().toLowerCase();
-
-  // Consulta a MongoDB con Mongoose; passwordHash está oculto y solo se selecciona para comparar.
   const user = await User.findOne({ email }).select('+passwordHash');
   const passwordIsWithinBcryptLimit = Buffer.byteLength(input.password, 'utf8') <= 72;
   const passwordMatches = user && passwordIsWithinBcryptLimit
     && await bcrypt.compare(input.password, user.passwordHash);
 
-  // Un mensaje único evita revelar si el correo existe o si la cuenta está desactivada.
+  // El mismo error evita revelar si existe el correo o si la cuenta está desactivada.
   if (!user || !user.active || !passwordMatches) {
     throw new ApiError(401, 'INVALID_CREDENTIALS', 'Email o contraseña incorrectos');
   }
 
-  return createAuthResponse(user);
+  const tokens = await tokenService.issueTokens(user, tokenOptions);
+  return { user: toPublicUser(user), ...tokens };
 };
 
-module.exports = { register, login };
+const refresh = async (input) => {
+  validateRefreshFields(input);
+  const { user, ...tokens } = await tokenService.rotateRefreshToken(input.refreshToken);
+  return { user: toPublicUser(user), ...tokens };
+};
+
+const refreshBrowserSession = async (refreshToken) => {
+  const { user, accessToken } = await tokenService.refreshBrowserSession(refreshToken);
+  return { user: toPublicUser(user), accessToken };
+};
+
+const logout = (auth) => tokenService.logout(auth);
+
+module.exports = { register, login, refresh, refreshBrowserSession, logout };

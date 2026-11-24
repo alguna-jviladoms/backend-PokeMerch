@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/api/auth/refresh"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "refreshToken": "{{refreshToken}}"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 401", () => pm.response.to.have.status(401));
+      pm.test("INVALID_REFRESH_TOKEN", () => {
+        const body = pm.response.json();
+        pm.expect(body.success).to.equal(false);
+        pm.expect(body.error.code).to.equal("INVALID_REFRESH_TOKEN");
+      });
+    language: text/javascript
+order: 13000

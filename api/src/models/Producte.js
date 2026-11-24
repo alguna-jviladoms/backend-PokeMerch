@@ -58,6 +58,12 @@ const producteSchema = new mongoose.Schema(
       required: [true, 'El activo es obligatorio'], // - required: es obligatorio
       default: true,   // por defecto el producto está activo
     },
+    imagen: {
+      type: String,   // - tipo: ruta string opcional, p. ej. /api/media/pikachu-clasico.webp
+      required: false,  // - required: no es obligatorio; sin imagen el storefront usa placeholder
+      trim: true,   // - trim: elimina los espacios innecesarios
+      maxlength: [255, 'La imagen no puede superar los 255 caracteres'],
+    },
   },
   {
     versionKey: false,    // elimina el campo __v que Mongoose añade por defecto
@@ -82,7 +88,8 @@ producteSchema.pre('save', function () {
 
 // Añade un método estático al modelo. que devuelve los productos activos de una categoría
 producteSchema.statics.activosPorCategoria = function (categoryId) {
-  return this.find({ category: categoryId, activo: true }).select('nombre descripcion precio sku');
+  // Incluimos imagen en el select para que las listas de la tienda la consuman sin consultas extra.
+  return this.find({ category: categoryId, activo: true }).select('nombre descripcion precio sku imagen');
 };
 
 // Compila el esquema y exporta el modelo Producte

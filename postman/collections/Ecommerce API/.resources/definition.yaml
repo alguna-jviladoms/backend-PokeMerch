@@ -7,4 +7,3 @@ variables:
   testSlug: ""
   testEmail: ""
   testSku: ""
-  missingNameSlug: ""
